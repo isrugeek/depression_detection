@@ -1,167 +1,253 @@
+# Hint: you should refer to the API in https://github.com/tensorflow/tensorflow/tree/r1.0/tensorflow/contrib
 # Use print(xxx) instead of print xxx
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np
 import tensorflow as tf
-from six.moves import range
+import numpy as np
+import shutil
 import os
+import random
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '13' 
 
 
-# Log level setting. (No need to modify.)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-tf.logging.set_verbosity(tf.logging.ERROR)
-
-# GPU memory configuration. (Do not modify.)
+# Global config, please don't modify
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-config.gpu_options.per_process_gpu_memory_fraction = 0.2
+config.gpu_options.per_process_gpu_memory_fraction = 0.20
+sess = tf.Session(config=config)
+model_dir = r'../model'
+
+# Dataset location
+DEPRESSION_DATASET = '../data/data.csv'
+DEPRESSION_TRAIN = '../data/training_data.csv'
+DEPRESSION_TEST = '../data/testing_data.csv'
+
+# Delete the exist model directory
+if os.path.exists(model_dir):
+    shutil.rmtree(model_dir)
 
 
-# Path of csv data.
-FASHION_TRAIN = '../data/fashion_train.csv'
-FASHION_TEST = '../data/fashion_test.csv'
 
-# Dimension of features and labels.
-NUM_FEATURES = 137
-NUM_LABELS = 2
+# TODO: 1. Split data (5%)
 
-# Load data from csv files.
-fashion_train = np.genfromtxt(FASHION_TRAIN, delimiter=',')
-fashion_test = np.genfromtxt(FASHION_TEST, delimiter=',')
-print('Original data shape:', fashion_train.shape, fashion_test.shape)
-
-# Split into feature and label matrix.
-train_features, train_labels = fashion_train[:, :NUM_FEATURES], fashion_train[:, NUM_FEATURES:]
-test_features, test_labels = fashion_test[:, :NUM_FEATURES], fashion_test[:, NUM_FEATURES:]
-print('Training set size:', train_features.shape, train_labels.shape)
-print('Test set size:', test_features.shape, test_labels.shape)
-
-# Combine train_features and test_features into ae_features.
-ae_features = np.concatenate((train_features, test_features))
-print('AE set size:', ae_features.shape)
+# Split data: split file DEPRESSION_DATASET into DEPRESSION_TRAIN and DEPRESSION_TEST with a ratio about 0.6:0.4.
+# Hint: first read DEPRESSION_DATASET, then output each line to DEPRESSION_TRAIN or DEPRESSION_TEST by use
+# random.random() to get a random real number between 0 and 1.
 
 
-# Training parameters to be adjusted.
-batch_size = 64
-learning_rate = 0.01
-num_steps = 10001
+# Reference https://docs.python.org/2/library/random.html
+#https://stackoverflow.com/questions/17412439/how-to-split-data-into-trainset-and-testset-randomly
+#https://cs230-stanford.github.io/train-dev-test-split.html
 
-# Hidden layer size.
-n_hidden_1 = 256
-n_hidden_2 = 128
+datafile = open(DEPRESSION_DATASET)
+train_data = open(DEPRESSION_TRAIN, 'w')
+test_data = open(DEPRESSION_TEST, 'w')
 
+'''
+#Method 1
+with open(datafile, "rb") as f:
+    data = f.read().split('\n')
 
-# Structure of autoencoder.
-graph = tf.Graph()
-with graph.as_default():
+random.shuffle(data)
 
-    # Input a batch of training data.
-    tf_train_features = tf.placeholder(tf.float32, shape=(batch_size, NUM_FEATURES))
+train_data = data[:60]
+test_data = data[60:]
 
-    # Weights and biases of encoder's first layer.
-    encoder_w1 = tf.Variable(tf.truncated_normal([NUM_FEATURES, n_hidden_1]))
-    encoder_b1 = tf.Variable(tf.zeros([n_hidden_1]))
+'''
 
-    # TODO : 1. Create weights and biases of encoder's second layer. (5%)
-    # Hint : use n_hidden_2
-    encoder_w2 = tf.Variable(tf.truncated_normal([n_hidden_1, n_hidden_2]))
-    encoder_b2 = tf.Variable(tf.zeros([n_hidden_2]))
+#Method 2
+'''
+for raw in datafile.readlines():
+    datafile.sort()  # make sure that the filenames have a fixed order before shuffling
+    random.seed(230)
+    random.shuffle(datafile) # shuffles the ordering of filenames (deterministic given the chosen seed)
+    split_1 = int(0.6 * len(filenames))
+    split_2 = int(0.4 * len(filenames))
+    train_filenames = datafile[:split_1]
+    train_data.write(train_filenames)
+    dev_filenames = datafile[split_1:split_2]
+    test_filenames = datafile[split_2:]
+    test_data.write(test_filenames)
 
-    # TODO : 2. Create weights and biases of encoder's *second* layer. (5%)
-    # Hint : pay attention to the symmetry between layers
     
-    decoder_w2 = tf.Variable(tf.truncated_normal([n_hidden_2, n_hidden_1]))
-    decoder_b2 = tf.Variable(tf.zeros([n_hidden_1]))
     
-    # Weights and biases of decoder's *first* layer.
-    decoder_w1 = tf.Variable(tf.truncated_normal([n_hidden_1, NUM_FEATURES]))
-    decoder_b1 = tf.Variable(tf.zeros([NUM_FEATURES]))
+'''
 
-    # Training computation.
-    encoder_l1 = tf.sigmoid(tf.matmul(tf_train_features, encoder_w1) + encoder_b1)
-    # TODO : 3. Write the computation of encoder's second layer and decoder's *second* layer. (5%)
-    # Hint : similar to encoder_l1 and decoder_l1
-    
-    encoder_l2 = tf.sigmoid(tf.matmul(encoder_l1, encoder_w2) + encoder_b2)
-    decoder_l2 = tf.sigmoid(tf.matmul(encoder_l2, decoder_w2) + decoder_b2)    
-    decoder_l1 = tf.sigmoid(tf.matmul(decoder_l2, decoder_w1) + decoder_b1)
-
-    # TODO : 4. Define the loss function. (5%)
-    # Hint : use tf.losses.mean_squared_error()
-    loss = tf.losses.mean_squared_error(decoder_l1, tf_train_features)
-
-    # TODO : 5. Define a gradient descent optimizer. (5%)
-    # Hint : user tf.train.GradientDescentOptimizer(...).minimize(...)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
-
-
-# Training process.
-with tf.Session(graph=graph, config=config) as session:
-    # Initialize the variables.
-    tf.global_variables_initializer().run()
-    print('Initialized')
-
-    # Autoencoder training process.
-    for step in range(num_steps):
-        # Pick an offset within the training data, which has been randomized.
-        offset = (step * batch_size) % (ae_features.shape[0] - batch_size)
-
-        # Generate a minibatch.
-        batch_data = ae_features[offset:(offset + batch_size), :]
-
-        # Prepare a dictionary telling the session where to feed the minibatch.
-        feed_dict = {tf_train_features : batch_data}
-
-        # Run the session and get the loss.
-        _, l = session.run([optimizer, loss], feed_dict=feed_dict)
-
-        # Print the loss every 500 steps.
-        if step % 500 == 0:
-            print('Minibatch loss at step %d: %.4f' % (step, l))
-
-    # TODO : 6. Change train_features and test_features from numpy arrays to tensorflow constants. (5%)
-    # Hint : use tf.constant(...); pay attention to "dtype" and "shape" parameters
-    train_features = tf.constant(train_features, dtype=tf.float32, shape=train_features.shape)
-    test_features = tf.constant(test_features, dtype=tf.float32, shape=test_features.shape)
-    # TODO : 7. Calculate the middle layer representation of train/test features. (5%)
-    # Hint : use tf.sigmoid(...) and tf.matmul(...); use encoder layers' weights/biases; add ".eval()" at the end of the expressions
-    train_features_new = tf.sigmoid(tf.matmul(tf.sigmoid(tf.matmul(train_features, encoder_w1) + encoder_b1), encoder_w2) + encoder_b2).eval()
-    test_features_new = tf.sigmoid(tf.matmul(tf.sigmoid(tf.matmul(test_features, encoder_w1) + encoder_b1), encoder_w2) + encoder_b2).eval()
- 
-    print('Middle layer representation size: ', train_features_new.shape, test_features_new.shape)
-
-    # Input function for DNN regressor.
-    def input_fn(features, label):
-        feature_cols = {str(k): tf.constant(features[:, k]) for k in range(n_hidden_2)}
-        label = tf.constant(label, dtype=tf.float32, shape=label.shape)
-        return feature_cols, label
-
-    total_loss = 0.0
-    # Train regression model on 2 dimensions separately. (x- and y-axis on the Fashion Semantic Space)
-    for index in [0, 1]:
-        # Feature columns for DNN regressor.
-        feature_cols = [tf.contrib.layers.real_valued_column(str(k)) for k in range(n_hidden_2)]
-        regressor = tf.contrib.learn.DNNRegressor(feature_columns=feature_cols, hidden_units=[32, 16])
-        # TODO : 8. Define DNN regressor. (5%)
-        # Hint : use feature_cols; define hidden layers' size
+#0.6 Training Data
+#0.4 Testing Data
+#Method 3
+train_ratio = 0.6
+for raw in datafile.readlines():
+    if random.random() < train_ratio:
+        train_data.write(raw)
         
-        regressor = tf.contrib.learn.DNNRegressor(feature_columns=feature_cols, hidden_units=[32, 16])
+    else:
+        test_data.write(raw)
+#print ("Training amount",train_data)
+#print ("Testing amount",test_data)
+datafile.close()
+train_data.close()
+test_data.close()
 
-        # TODO : 9. Train the regressor. (5%)
-        # Hint : feed train features and label into input_fn(...)
+# Reference https://www.tensorflow.org/versions/r1.1/get_started/tflear
 
-        regressor.fit(input_fn=lambda: input_fn(train_features_new, train_labels[:, index]), steps=100)
+# TODO: 2. Load data (5%)
 
-        # TODO : 10. Evaluate the loss on test set. (5%)
-        # Hint : feed test features and label into input_fn(...)
-        current_loss = regressor.evaluate(input_fn=lambda: input_fn(test_features_new, test_labels[:, index]), steps=1)['loss']
-       
+training_set = tf.contrib.learn.datasets.base.load_csv_without_header(
+    filename=DEPRESSION_TRAIN,
+    target_dtype=np.int32,
+    features_dtype=np.float32)
 
-        print('Index %d MSE loss: %.4f' % (index, current_loss))
-        total_loss += current_loss
+test_set = tf.contrib.learn.datasets.base.load_csv_without_header(
+    filename=DEPRESSION_TEST,
+    target_dtype=np.int32,
+    features_dtype=np.float32)
 
-    # Print the sum of 2 dimensions' loss.
-    print('Total MSE loss: %.4f' % total_loss)
+features_train = tf.constant(training_set.data)
+features_test = tf.constant(test_set.data)
+labels_train = tf.constant(training_set.target)
+labels_test = tf.constant(test_set.target)
 
+# TODO: 3. Normalize data (15%)
+
+normalize = tf.concat(axis=0, values=[features_train, features_test])
+# or 
+'''
+Reference : https://www.tensorflow.org/api_docs/python/tf/nn/l2_normalize
+tf.nn.l2_normalize(
+    x,
+    axis=None,
+    epsilon=1e-12,
+    name=None,
+    dim=None
+)
+'''
+normalize = tf.nn.l2_normalize(x=normalize, dim=0)
+# slice from 0,0 to training  data and then from trainning  data to test data
+
+
+
+features_train = tf.slice(normalize, [0, 0], [len(training_set.data), -1])
+features_test = tf.slice(normalize, [len(training_set.data), 0], [len(test_set.data), -1])
+
+
+# Hint:
+# we must normalize all the data at the same time, so we should combine the training set and testing set
+# firstly, and split them apart after normalization. After this step, your features_train and features_test will be
+# new feature tensors.
+# Some functions you may need: tf.nn.l2_normalize, tf.concat, tf.slice
+
+# TODO: 4. Build linear classifier with `tf.contrib.learn` (5%)
+#dim = datafile.data.size[1]
+#print (dim)
+
+# we can get this from the csv file 
+dim = 112 #How many dimensions our feature have
+feature_columns = [tf.contrib.layers.real_valued_column("", dimension=dim)]
+
+# You should fill in the argument of LinearClassifier
+
+###################################################Linear_Classifier#######################
+
+#classifier = tf.contrib.learn.LinearClassifier(feature_columns=feature_columns,model_dir=model_dir, n_classes=2, optimizer=tf.train.AdamOptimizer(0.01))
+###################################################Linear_classier######################################
+# TODO: 5. Build DNN classifier with `tf.contrib.learn` (5%)
+
+# You should fill in the argument of DNNClassifier
+###########################DNN#########################################
+classifier = tf.contrib.learn.DNNClassifier(feature_columns=feature_columns,
+                                            hidden_units=[64,32,16,8,64],
+                                            n_classes=2,
+                                            model_dir=model_dir)
+###############################END_DNN#########################################################
+#https://www.tensorflow.org/api_docs/python/tf/contrib/learn/LinearClassifier
+#linear_classifier = tf.contrib.learn.LinearClassifier(feature_columns)
+# Define the training inputs
+def get_train_inputs():
+    x = tf.constant(features_train.eval(session=sess))
+    y = tf.constant(labels_train.eval(session=sess))
+
+    return x, y
+
+# Define the test inputs
+def get_test_inputs():
+    x = tf.constant(features_test.eval(session=sess))
+    y = tf.constant(labels_test.eval(session=sess))
+
+    return x, y
+
+# TODO: 6. Fit model. (5%)
+
+
+classifier.fit(input_fn=get_train_inputs, steps=400)
+
+
+
+validation_metrics = {
+    "true_negatives":
+        tf.contrib.learn.MetricSpec(
+            metric_fn=tf.contrib.metrics.streaming_true_negatives,
+            prediction_key=tf.contrib.learn.PredictionKey.CLASSES
+        ),
+    "true_positives":
+        tf.contrib.learn.MetricSpec(
+            metric_fn=tf.contrib.metrics.streaming_true_positives,
+            prediction_key=tf.contrib.learn.PredictionKey.CLASSES
+        ),
+    "false_negatives":
+        tf.contrib.learn.MetricSpec(
+            metric_fn=tf.contrib.metrics.streaming_false_negatives,
+            prediction_key=tf.contrib.learn.PredictionKey.CLASSES
+        ),
+    "false_positives":
+        tf.contrib.learn.MetricSpec(
+            metric_fn=tf.contrib.metrics.streaming_false_positives,
+            prediction_key=tf.contrib.learn.PredictionKey.CLASSES
+        ),
+}
+
+# TODO: 7. Make Evaluation (10%)
+
+# evaluate the model and get TN, FN, TP, FP
+result = classifier.evaluate(input_fn=get_test_inputs,
+                             steps=1
+                             , metrics=validation_metrics)
+
+TN = result["true_negatives"]
+FN = result["false_negatives"]
+TP = result["true_positives"]
+FP = result["false_positives"]
+
+# You should evaluate your model in following metrics and print the result:
+# Accuracy
+
+# Precision in macro-average
+
+# Recall in macro-average
+
+
+acc = (TN + TP) / (TN + FN + TP + FP)
+print ("Accuracy",acc)
+
+
+pr_pos = TP / (TP + FP)
+pr_neg = TN / (TN + FN)
+pre_mac = (pr_pos + pr_neg) 
+pre_mac = pre_mac/2
+print ("Precioson in macro-average",pre_mac)
+
+
+re_pos = TP / (TP + FN)
+re_neg = TN / (TN + FP)
+re_mac = (re_pos + re_neg)
+re_mac = re_mac/2
+print ("Recall in macro-average",re_mac)
+
+
+f1_score_pos = 2 * pr_pos * re_pos / (pr_pos + re_pos)
+f1_score_neg = 2 * pr_neg * re_neg / (pr_neg + re_neg)
+f1_score_macro = (f1_score_neg + f1_score_pos) / 2
+print ("F1-score in macro-average",f1_score_macro)
